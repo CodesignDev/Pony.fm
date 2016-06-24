@@ -25,8 +25,10 @@ var gulp = require("gulp"),
     WebpackDevServer = require("webpack-dev-server"),
     webpackDevConfig = require("./webpack.dev.config.js"),
     webpackProductionConfig = require("./webpack.production.config.js"),
-    webpackStream = require('webpack-stream'),
-    _ = require("underscore");
+    webpackStream = require("webpack-stream"),
+    _ = require("underscore"),
+    path = require("path"),
+    swPrecache = require("sw-precache");
 
 var plumberOptions = {
     errorHandler: plug.notify.onError("Error: <%= error.message %>")
@@ -59,7 +61,7 @@ gulp.task("webpack-build", function() {
     return gulp.src(_.values(webpackProductionConfig.entry))
         .pipe(webpackStream(webpackProductionConfig))
         .pipe(header(licenseHeader))
-        .pipe(gulp.dest('public'));
+        .pipe(gulp.dest("public"));
 });
 
 
@@ -87,7 +89,7 @@ gulp.task("styles-app", function () {
     ];
 
     if (!argv.production) {
-        // we also want to add the embed stuff, since we're in development mode
+        // we also want to add the embed stuff, since we"re in development mode
         // we want to watch embed files and re-compile them. However, we want
         // to leave this path out in production so that embed files are not bloating
         // the css file
@@ -152,23 +154,41 @@ gulp.task("styles-embed", function () {
         .pipe(gulp.dest("public/build/styles"));
 });
 
-gulp.task('copy:templates', function () {
+gulp.task("copy:templates", function () {
     gulp.src([
-        'public/templates/**/*.html'
+        "public/templates/**/*.html"
     ])
         .pipe(plug.angularTemplatecache({
             module: "ponyfm",
             root: "/templates"
         }))
         .pipe(header(licenseHeader))
-        .pipe(gulp.dest('public/build/scripts'));
+        .pipe(gulp.dest("public/build/scripts"));
 });
 
-gulp.task('build', [
-    'webpack-build',
-    'copy:templates',
-    'styles-app',
-    'styles-embed'
+gulp.task("service-worker", function (callback) {
+    gulp.src(["node_modules/sw-toolbox/sw-toolbox.js"])
+        .pipe(gulp.dest("public/service-worker"));
+
+    swPrecache.write("public/service-worker.js", {
+        staticFileGlobs: [
+            "/",
+            "public/build/**/*.{js,css}",
+            "public/images/ponyfm-logo-white.svg",
+            "public/images/ponyfm-logo-white-nodisc.svg",
+            "public/images/poniverse.svg"
+        ],
+        importScripts: ["service-worker/push.js"],
+        stripPrefix: "public"
+    }, callback);
+});
+
+gulp.task("build", [
+    "webpack-build",
+    "copy:templates",
+    "styles-app",
+    "styles-embed",
+    "service-worker"
 ]);
 
 gulp.task("watch-legacy", ["build"], function () {

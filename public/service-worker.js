@@ -1,113 +1,260 @@
-// Pony.fm - A community for pony fan music.
-// Copyright (C) 2016 Josef Citrine
-//
-// This program is free software: you can redistribute it and/or modify
-// it under the terms of the GNU Affero General Public License as published by
-// the Free Software Foundation, either version 3 of the License, or
-// (at your option) any later version.
-//
-// This program is distributed in the hope that it will be useful,
-// but WITHOUT ANY WARRANTY; without even the implied warranty of
-// MERCHANTABILITY or FITNESS FOR A PARTICULAR PURPOSE.  See the
-// GNU Affero General Public License for more details.
-//
-// You should have received a copy of the GNU Affero General Public License
-// along with this program.  If not, see <http://www.gnu.org/licenses/>.
+/**
+ * Copyright 2016 Google Inc. All rights reserved.
+ *
+ * Licensed under the Apache License, Version 2.0 (the "License");
+ * you may not use this file except in compliance with the License.
+ * You may obtain a copy of the License at
+ *
+ *     http://www.apache.org/licenses/LICENSE-2.0
+ *
+ * Unless required by applicable law or agreed to in writing, software
+ * distributed under the License is distributed on an "AS IS" BASIS,
+ * WITHOUT WARRANTIES OR CONDITIONS OF ANY KIND, either express or implied.
+ * See the License for the specific language governing permissions and
+ * limitations under the License.
+ */
+
+// This generated service worker JavaScript will precache your site's resources.
+// The code needs to be saved in a .js file at the top-level of your site, and registered
+// from your pages in order to be used. See
+// https://github.com/googlechrome/sw-precache/blob/master/demo/app/js/service-worker-registration.js
+// for an example of how you can register this script and handle various service worker events.
+
+/* eslint-env worker, serviceworker */
+/* eslint-disable indent, no-unused-vars, no-multiple-empty-lines, max-nested-callbacks, space-before-function-paren */
+'use strict';
 
 
-var urlsToCache = [
-  '/offline.html',
-  '/styles/offline.css',
-  '/images/ponyfm-logo-white.svg'
-];
 
-var CACHE_NAME = 'pfm-offline-v1';
 
-var notifUrlCache = {};
+importScripts("service-worker/push.js");
 
-function getChromeVersion () {
-  var raw = navigator.userAgent.match(/Chrom(e|ium)\/([0-9]+)\./);
 
-  return raw ? parseInt(raw[2], 10) : false;
+/* eslint-disable quotes, comma-spacing */
+var PrecacheConfig = [["/build/scripts/app.js","1d44155f4df25dc032badd507a36ba89"],["/build/scripts/embed.js","40a3505de238384eb747260ce8f80815"],["/build/scripts/templates.js","a0291b661a1af437541213062fe602ad"],["/build/styles/app.css","c11568a2eb91c370106a456db6511c78"],["/build/styles/base/colorbox.css","f9a3709cbf294022e7cbebb7c3547710"],["/build/styles/base/jquery-ui.css","3dbf4fdc3d422ce908c1d4162043acae"],["/build/styles/embed.css","788bf7682475ea74a2a756fd70bfae7b"],["/images/poniverse.svg","7c2b055f85aa42ffd1d2bd4e32104f6c"],["/images/ponyfm-logo-white-nodisc.svg","025d752d7f81a8b019d9323e62ab0a9b"],["/images/ponyfm-logo-white.svg","8aa21c5177a5c74a5de57328e5c57cfe"]];
+/* eslint-enable quotes, comma-spacing */
+var CacheNamePrefix = 'sw-precache-v1--' + (self.registration ? self.registration.scope : '') + '-';
+
+
+var IgnoreUrlParametersMatching = [/^utm_/];
+
+
+
+var addDirectoryIndex = function (originalUrl, index) {
+    var url = new URL(originalUrl);
+    if (url.pathname.slice(-1) === '/') {
+      url.pathname += index;
+    }
+    return url.toString();
+  };
+
+var getCacheBustedUrl = function (url, param) {
+    param = param || Date.now();
+
+    var urlWithCacheBusting = new URL(url);
+    urlWithCacheBusting.search += (urlWithCacheBusting.search ? '&' : '') +
+      'sw-precache=' + param;
+
+    return urlWithCacheBusting.toString();
+  };
+
+var isPathWhitelisted = function (whitelist, absoluteUrlString) {
+    // If the whitelist is empty, then consider all URLs to be whitelisted.
+    if (whitelist.length === 0) {
+      return true;
+    }
+
+    // Otherwise compare each path regex to the path of the URL passed in.
+    var path = (new URL(absoluteUrlString)).pathname;
+    return whitelist.some(function(whitelistedPathRegex) {
+      return path.match(whitelistedPathRegex);
+    });
+  };
+
+var populateCurrentCacheNames = function (precacheConfig,
+    cacheNamePrefix, baseUrl) {
+    var absoluteUrlToCacheName = {};
+    var currentCacheNamesToAbsoluteUrl = {};
+
+    precacheConfig.forEach(function(cacheOption) {
+      var absoluteUrl = new URL(cacheOption[0], baseUrl).toString();
+      var cacheName = cacheNamePrefix + absoluteUrl + '-' + cacheOption[1];
+      currentCacheNamesToAbsoluteUrl[cacheName] = absoluteUrl;
+      absoluteUrlToCacheName[absoluteUrl] = cacheName;
+    });
+
+    return {
+      absoluteUrlToCacheName: absoluteUrlToCacheName,
+      currentCacheNamesToAbsoluteUrl: currentCacheNamesToAbsoluteUrl
+    };
+  };
+
+var stripIgnoredUrlParameters = function (originalUrl,
+    ignoreUrlParametersMatching) {
+    var url = new URL(originalUrl);
+
+    url.search = url.search.slice(1) // Exclude initial '?'
+      .split('&') // Split into an array of 'key=value' strings
+      .map(function(kv) {
+        return kv.split('='); // Split each 'key=value' string into a [key, value] array
+      })
+      .filter(function(kv) {
+        return ignoreUrlParametersMatching.every(function(ignoredRegex) {
+          return !ignoredRegex.test(kv[0]); // Return true iff the key doesn't match any of the regexes.
+        });
+      })
+      .map(function(kv) {
+        return kv.join('='); // Join each [key, value] array into a 'key=value' string
+      })
+      .join('&'); // Join the array of 'key=value' strings into a string with '&' in between each
+
+    return url.toString();
+  };
+
+
+var mappings = populateCurrentCacheNames(PrecacheConfig, CacheNamePrefix, self.location);
+var AbsoluteUrlToCacheName = mappings.absoluteUrlToCacheName;
+var CurrentCacheNamesToAbsoluteUrl = mappings.currentCacheNamesToAbsoluteUrl;
+
+function deleteAllCaches() {
+  return caches.keys().then(function(cacheNames) {
+    return Promise.all(
+      cacheNames.map(function(cacheName) {
+        return caches.delete(cacheName);
+      })
+    );
+  });
 }
 
-// Set the callback for the install step
 self.addEventListener('install', function(event) {
-  // Perform install steps
   event.waitUntil(
-    caches.open(CACHE_NAME)
-    .then(function(cache) {
-      cache.addAll(urlsToCache);
-    })
-  );
-});
+    // Take a look at each of the cache names we expect for this version.
+    Promise.all(Object.keys(CurrentCacheNamesToAbsoluteUrl).map(function(cacheName) {
+      return caches.open(cacheName).then(function(cache) {
+        // Get a list of all the entries in the specific named cache.
+        // For caches that are already populated for a given version of a
+        // resource, there should be 1 entry.
+        return cache.keys().then(function(keys) {
+          // If there are 0 entries, either because this is a brand new version
+          // of a resource or because the install step was interrupted the
+          // last time it ran, then we need to populate the cache.
+          if (keys.length === 0) {
+            // Use the last bit of the cache name, which contains the hash,
+            // as the cache-busting parameter.
+            // See https://github.com/GoogleChrome/sw-precache/issues/100
+            var cacheBustParam = cacheName.split('-').pop();
+            var urlWithCacheBusting = getCacheBustedUrl(
+              CurrentCacheNamesToAbsoluteUrl[cacheName], cacheBustParam);
 
-// Delete old caches
-self.addEventListener('activate', function (event) {
-  event.waitUntil(caches.keys().then(function (cacheNames) {
-    return Promise.all(cacheNames.map(function (cacheName) {
-      if (cacheName != CACHE_NAME) {
-        return caches.delete(cacheName);
-      }
-    }));
-  }));
-});
+            var request = new Request(urlWithCacheBusting,
+              {credentials: 'same-origin'});
+            return fetch(request).then(function(response) {
+              if (response.ok) {
+                return cache.put(CurrentCacheNamesToAbsoluteUrl[cacheName],
+                  response);
+              }
 
-// Basic offline mode
-// Just respond with an offline error page for now
-self.addEventListener('fetch', function(event) {
-  if (event.request.url.indexOf('stage.pony.fm') > -1 || event.request.url.indexOf('upload') > -1) {
-    // Ignore some requests
-    return;
-  } else {
-    event.respondWith(
-        caches.match(event.request).then(function (response) {
-          return response || fetch(event.request);
-        }).catch(function () {
-          if (event.request.mode == 'navigate') {
-            return caches.match('/offline.html');
+              console.error('Request for %s returned a response status %d, ' +
+                'so not attempting to cache it.',
+                urlWithCacheBusting, response.status);
+              // Get rid of the empty cache if we can't add a successful response to it.
+              return caches.delete(cacheName);
+            });
           }
-        })
-    )
-  }
-});
-
-self.addEventListener('push', function(event) {
-  console.log(event);
-  var data = {};
-
-  if (event.data) {
-    console.log(event.data.json());
-    data = JSON.parse(event.data.text());
-  }
-
-  notifUrlCache['pfm-' + data.id] = data.url;
-
-  self.registration.showNotification(data.title, {
-    body: data.text,
-    icon: data.image,
-    tag: 'pfm-' + data.id
-  })
-});
-
-self.addEventListener('notificationclick', function(event) {
-  event.notification.close();
-
-  event.waitUntil(
-    clients.matchAll({
-      type: "window"
-    })
-    .then(function(clientList) {
-      var url = notifUrlCache[event.notification.tag];
-      for (var i = 0; i < clientList.length; i++) {
-        var client = clientList[i];
-        if (client.url == url && 'focus' in client)
-          return client.focus();
-      }
-
-      if (clients.openWindow) {
-        return clients.openWindow(url);
+        });
+      });
+    })).then(function() {
+      return caches.keys().then(function(allCacheNames) {
+        return Promise.all(allCacheNames.filter(function(cacheName) {
+          return cacheName.indexOf(CacheNamePrefix) === 0 &&
+            !(cacheName in CurrentCacheNamesToAbsoluteUrl);
+          }).map(function(cacheName) {
+            return caches.delete(cacheName);
+          })
+        );
+      });
+    }).then(function() {
+      if (typeof self.skipWaiting === 'function') {
+        // Force the SW to transition from installing -> active state
+        self.skipWaiting();
       }
     })
   );
 });
+
+if (self.clients && (typeof self.clients.claim === 'function')) {
+  self.addEventListener('activate', function(event) {
+    event.waitUntil(self.clients.claim());
+  });
+}
+
+self.addEventListener('message', function(event) {
+  if (event.data.command === 'delete_all') {
+    console.log('About to delete all caches...');
+    deleteAllCaches().then(function() {
+      console.log('Caches deleted.');
+      event.ports[0].postMessage({
+        error: null
+      });
+    }).catch(function(error) {
+      console.log('Caches not deleted:', error);
+      event.ports[0].postMessage({
+        error: error
+      });
+    });
+  }
+});
+
+
+self.addEventListener('fetch', function(event) {
+  if (event.request.method === 'GET') {
+    var urlWithoutIgnoredParameters = stripIgnoredUrlParameters(event.request.url,
+      IgnoreUrlParametersMatching);
+
+    var cacheName = AbsoluteUrlToCacheName[urlWithoutIgnoredParameters];
+    var directoryIndex = 'index.html';
+    if (!cacheName && directoryIndex) {
+      urlWithoutIgnoredParameters = addDirectoryIndex(urlWithoutIgnoredParameters, directoryIndex);
+      cacheName = AbsoluteUrlToCacheName[urlWithoutIgnoredParameters];
+    }
+
+    var navigateFallback = '';
+    // Ideally, this would check for event.request.mode === 'navigate', but that is not widely
+    // supported yet:
+    // https://code.google.com/p/chromium/issues/detail?id=540967
+    // https://bugzilla.mozilla.org/show_bug.cgi?id=1209081
+    if (!cacheName && navigateFallback && event.request.headers.has('accept') &&
+        event.request.headers.get('accept').includes('text/html') &&
+        /* eslint-disable quotes, comma-spacing */
+        isPathWhitelisted([], event.request.url)) {
+        /* eslint-enable quotes, comma-spacing */
+      var navigateFallbackUrl = new URL(navigateFallback, self.location);
+      cacheName = AbsoluteUrlToCacheName[navigateFallbackUrl.toString()];
+    }
+
+    if (cacheName) {
+      event.respondWith(
+        // Rely on the fact that each cache we manage should only have one entry, and return that.
+        caches.open(cacheName).then(function(cache) {
+          return cache.keys().then(function(keys) {
+            return cache.match(keys[0]).then(function(response) {
+              if (response) {
+                return response;
+              }
+              // If for some reason the response was deleted from the cache,
+              // raise and exception and fall back to the fetch() triggered in the catch().
+              throw Error('The cache ' + cacheName + ' is empty.');
+            });
+          });
+        }).catch(function(e) {
+          console.warn('Couldn\'t serve response for "%s" from cache: %O', event.request.url, e);
+          return fetch(event.request);
+        })
+      );
+    }
+  }
+});
+
+
+
+
