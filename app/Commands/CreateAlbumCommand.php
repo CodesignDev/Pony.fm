@@ -87,7 +87,7 @@ class CreateAlbumCommand extends CommandBase
             }
         }
 
-        $trackIds = explode(',', $this->_input['track_ids']);
+        $trackIds = $this->_input['track_ids'];
         $album->save();
         $album->syncTrackIds($trackIds);
 

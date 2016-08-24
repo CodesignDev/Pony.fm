@@ -96,7 +96,7 @@ module.exports = angular.module('ponyfm').controller "account-albums-edit", [
                 else
                     formData.append name, value
 
-            formData.append 'track_ids', _.map($scope.tracks, (t) -> t.id).join()
+            formData.append 'track_ids', JSON.stringify(_.map($scope.tracks, (t) -> t.id))
             formData.append 'user_id', $scope.artist.id
 
             xhr.open 'POST', url, true

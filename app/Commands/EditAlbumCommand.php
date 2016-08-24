@@ -72,7 +72,7 @@ class EditAlbumCommand extends CommandBase
             return CommandResponse::fail($validator);
         }
 
-        $trackIds = explode(',', $this->_input['track_ids']);
+        $trackIds = explode(',', str_replace(array( '[', ']' ), '', $this->_input['track_ids']));
         $trackIdsCount = count($trackIds);
         $trackDbCount = DB::table('tracks')->whereIn('id', $trackIds)->count();
 
@@ -103,8 +103,7 @@ class EditAlbumCommand extends CommandBase
             $this->_album->user_id = $newid;
             }
         }
-
-        $trackIds = explode(',', $this->_input['track_ids']);
+        
         $this->_album->syncTrackIds($trackIds);
         $this->_album->save();
 
